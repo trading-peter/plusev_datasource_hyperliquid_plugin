@@ -10,7 +10,6 @@ import (
 	rt "github.com/plusev-terminal/go-plugin-common/requester/types"
 )
 
-
 // Client is the Hyperliquid API client.
 type Client struct {
 	name      string
@@ -30,7 +29,6 @@ type Client struct {
 	spotIndexCache map[string]int // pair name → 10000+index
 }
 
-
 // NewClient creates a new Hyperliquid API client.
 func NewClient(req rt.RequestDoer, baseURL string, isMainnet bool) *Client {
 	wsURL := "wss://api.hyperliquid.xyz/ws"
@@ -49,7 +47,6 @@ func NewClient(req rt.RequestDoer, baseURL string, isMainnet bool) *Client {
 		spotIndexCache: nil,
 	}
 }
-
 
 // SetCredentials stores the decrypted wallet credentials.
 func (c *Client) SetCredentials(creds map[string]string) {
@@ -74,11 +71,9 @@ func (c *Client) SetCredentials(creds map[string]string) {
 	}
 }
 
-
 func (c *Client) GetName() string {
 	return c.name
 }
-
 
 func (c *Client) GetConfigFields() []plugin.ConfigField {
 	return []plugin.ConfigField{
@@ -108,9 +103,46 @@ func (c *Client) GetConfigFields() []plugin.ConfigField {
 	}
 }
 
+// infoWeight returns the documented /info request weight used as the
+// Cost for the host's weighted rate-limit rule: 2 for l2Book, allMids,
+// clearinghouseState, orderStatus, spotClearinghouseState and exchangeStatus;
+// 60 for userRole; 20 for all other documented info requests.
+// candleSnapshot additionally scales with response size (weight per 60 items
+// returned), which cannot be known before the request — the documented base
+// weight is charged.
+// Source: https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/rate-limits-and-user-limits
+func infoWeight(infoType string) int {
+	switch infoType {
+	case "l2Book", "allMids", "clearinghouseState", "orderStatus", "spotClearinghouseState", "exchangeStatus":
+		return 2
+	case "userRole":
+		return 60
+	default:
+		return 20
+	}
+}
+
+// exchangeWeight returns the documented /exchange action weight
+// 1 + floor(batch_length/40), where batch_length is the number of orders or
+// cancels in the action; unbatched actions (e.g. twapOrder) weigh 1.
+// Source: https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/rate-limits-and-user-limits
+func exchangeWeight(action any) int {
+	batchLen := 0
+	switch a := action.(type) {
+	case OrderAction:
+		batchLen = len(a.Orders)
+	case CancelAction:
+		batchLen = len(a.Cancels)
+	case CancelByCloidAction:
+		batchLen = len(a.Cancels)
+	}
+	return 1 + batchLen/40
+}
 
 // post sends a POST request to an API endpoint and decodes the response.
-func (c *Client) post(path string, body any, result any) error {
+// cost is the request's weight for the host's weighted rate limit; 0 counts
+// as 1.
+func (c *Client) post(path string, body any, result any, cost int) error {
 	bodyBytes, err := json.Marshal(body)
 	if err != nil {
 		return fmt.Errorf("failed to marshal request body: %w", err)
@@ -121,6 +153,7 @@ func (c *Client) post(path string, body any, result any) error {
 		URL:     c.baseURL + path,
 		Headers: map[string]string{"Content-Type": "application/json"},
 		Body:    bodyBytes,
+		Cost:    cost,
 	}
 
 	_, err = c.requester.Send(req, result)
@@ -131,12 +164,10 @@ func (c *Client) post(path string, body any, result any) error {
 	return nil
 }
 
-
 // postInfo sends a request to the /info endpoint.
 func (c *Client) postInfo(infoReq InfoRequest, result any) error {
-	return c.post("/info", infoReq, result)
+	return c.post("/info", infoReq, result, infoWeight(infoReq.Type))
 }
-
 
 // postExchange sends a signed action to the /exchange endpoint.
 func (c *Client) postExchange(action any, result any) error {
@@ -153,9 +184,8 @@ func (c *Client) postExchange(action any, result any) error {
 		"signature": sig,
 	}
 
-	return c.post("/exchange", body, result)
+	return c.post("/exchange", body, result, exchangeWeight(action))
 }
-
 
 // ensureAssetIndex loads perp and spot metadata if not cached.
 func (c *Client) ensureAssetIndex() error {
@@ -221,7 +251,6 @@ func (c *Client) ensureAssetIndex() error {
 	return nil
 }
 
-
 // coinToAssetIndex converts a symbol/coin name to the Hyperliquid asset index.
 // For perps: returns the universe index directly.
 // For spot: returns 10000 + index.
@@ -252,7 +281,6 @@ func (c *Client) coinToAssetIndex(symbol string, isSpot bool) (int, error) {
 
 	return 0, fmt.Errorf("coin %s not found in perp metadata", symbol)
 }
-
 
 // normalizeCloid ensures a cloid string is a valid 0x-prefixed 128-bit hex.
 // If the input is already valid hex, it is returned as-is.

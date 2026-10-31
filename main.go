@@ -13,7 +13,6 @@ import (
 	m "github.com/plusev-terminal/go-plugin-common/meta"
 )
 
-
 func init() {
 	p := &HyperliquidPlugin{}
 
@@ -21,20 +20,20 @@ func init() {
 	plugin.RegisterStreamHandler(&streamHandlerWrapper{p: p})
 }
 
-
 func main() {}
-
 
 // ============================================================================
 // Plugin Implementation
 // ============================================================================
-
 
 type HyperliquidPlugin struct {
 	config *plugin.ConfigStore
 	client *hyperliquid.Client
 }
 
+// tradingReserve keeps part of each API host's weight budget free for order
+// commands (createOrders/cancelOrders), which share the host with data pulls.
+var tradingReserve = 0.3
 
 func (p *HyperliquidPlugin) GetMeta() m.Meta {
 	return m.Meta{
@@ -52,8 +51,36 @@ func (p *HyperliquidPlugin) GetMeta() m.Meta {
 		},
 		Resources: m.ResourceAccess{
 			AllowedNetworkTargets: []m.NetworkTargetRule{
-				{Pattern: "https://api.hyperliquid.xyz/*"},
-				{Pattern: "https://api.hyperliquid-testnet.xyz/*"},
+				// Hyperliquid rate limits, retrieved 2026-10-31:
+				// https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/rate-limits-and-user-limits
+				// "REST requests share an aggregated weight limit of 1200 per
+				// minute" per IP. Info request weights: 2 (l2Book, allMids,
+				// clearinghouseState, orderStatus, spotClearinghouseState,
+				// exchangeStatus), 60 (userRole), 20 (all other documented info
+				// requests). Exchange actions weigh 1 + floor(batch_length/40).
+				// The per-request Cost is set in hyperliquid/client.go.
+				{
+					Pattern: "https://api.hyperliquid.xyz/*",
+					Limits: []m.RateLimitRule{
+						// 1200 weight/min per IP shared by /info and /exchange
+						// (= 20 weight/s); the docs publish a 1-minute window
+						// and no smaller bucket, so burst = the full window.
+						m.NewRateLimitRule("weight", 1200, time.Minute).WithLabel("Request weight").Weighted(),
+					},
+					TradingReserve: &tradingReserve,
+				},
+				{
+					// Same published budget as mainnet; order actions share
+					// the host with data pulls here too.
+					Pattern: "https://api.hyperliquid-testnet.xyz/*",
+					Limits: []m.RateLimitRule{
+						m.NewRateLimitRule("weight", 1200, time.Minute).WithLabel("Request weight").Weighted(),
+					},
+					TradingReserve: &tradingReserve,
+				},
+				// WebSocket targets stay unlimited: the documented WS caps
+				// (10 connections, 2000 msgs/min, ...) are connection-level,
+				// not HTTP request budgets.
 				{Pattern: "wss://api.hyperliquid.xyz/*"},
 				{Pattern: "wss://api.hyperliquid-testnet.xyz/*"},
 			},
@@ -62,22 +89,13 @@ func (p *HyperliquidPlugin) GetMeta() m.Meta {
 	}
 }
 
-
+// GetRateLimits intentionally returns an empty slice: Hyperliquid's real
+// budget (1200 weight/min per IP) is declared as manifest Limits on the
+// network targets above, and returning per-command values here would stack
+// the legacy limiter on top of it.
 func (p *HyperliquidPlugin) GetRateLimits() []plugin.RateLimit {
-	return []plugin.RateLimit{
-		{Command: ex.CMD_GET_MARKETS, Scope: []plugin.RateLimitScope{plugin.RateLimitScopeIP}, RPS: 2, Burst: 2},
-		{Command: ex.CMD_GET_TIMEFRAMES, Scope: []plugin.RateLimitScope{plugin.RateLimitScopeIP}, RPS: 10, Burst: 10},
-		{Command: ex.CMD_GET_OHLCV, Scope: []plugin.RateLimitScope{plugin.RateLimitScopeIP}, RPS: 5, Burst: 5},
-		{Command: ex.CMD_OHLCV_STREAM, Scope: []plugin.RateLimitScope{plugin.RateLimitScopeIP}, RPS: 1, Burst: 5},
-		{Command: ex.CMD_GET_ACCOUNT, Scope: []plugin.RateLimitScope{plugin.RateLimitScopeAPIKey}, RPS: 2, Burst: 2},
-		{Command: ex.CMD_GET_BALANCES, Scope: []plugin.RateLimitScope{plugin.RateLimitScopeAPIKey}, RPS: 2, Burst: 2},
-		{Command: ex.CMD_GET_POSITIONS, Scope: []plugin.RateLimitScope{plugin.RateLimitScopeAPIKey}, RPS: 2, Burst: 2},
-		{Command: ex.CMD_GET_ORDERS, Scope: []plugin.RateLimitScope{plugin.RateLimitScopeAPIKey}, RPS: 2, Burst: 2},
-		{Command: ex.CMD_CREATE_ORDERS, Scope: []plugin.RateLimitScope{plugin.RateLimitScopeAPIKey}, RPS: 5, Burst: 5},
-		{Command: ex.CMD_CANCEL_ORDERS, Scope: []plugin.RateLimitScope{plugin.RateLimitScopeAPIKey}, RPS: 5, Burst: 5},
-	}
+	return []plugin.RateLimit{}
 }
-
 
 func (p *HyperliquidPlugin) GetConfigFields() []plugin.ConfigField {
 	if p.client == nil {
@@ -86,7 +104,6 @@ func (p *HyperliquidPlugin) GetConfigFields() []plugin.ConfigField {
 
 	return p.client.GetConfigFields()
 }
-
 
 func (p *HyperliquidPlugin) OnInit(config *plugin.ConfigStore) error {
 	p.config = config
@@ -115,11 +132,9 @@ func (p *HyperliquidPlugin) OnInit(config *plugin.ConfigStore) error {
 	return nil
 }
 
-
 func (p *HyperliquidPlugin) OnShutdown() error {
 	return nil
 }
-
 
 func (p *HyperliquidPlugin) RegisterCommands(router *plugin.CommandRouter) {
 	router.Register(ex.CMD_GET_MARKETS, p.handleGetMarkets)
@@ -134,16 +149,13 @@ func (p *HyperliquidPlugin) RegisterCommands(router *plugin.CommandRouter) {
 	router.Register(ex.CMD_CANCEL_ORDERS, p.handleCancelOrders)
 }
 
-
 // ============================================================================
 // Stream Handler Wrapper
 // ============================================================================
 
-
 type streamHandlerWrapper struct {
 	p *HyperliquidPlugin
 }
-
 
 func (w *streamHandlerWrapper) HandleStreamMessage(req plugin.StreamMessageRequest) (plugin.StreamMessageResponse, error) {
 	if w.p.client == nil {
@@ -153,7 +165,6 @@ func (w *streamHandlerWrapper) HandleStreamMessage(req plugin.StreamMessageReque
 	return w.p.client.HandleStreamMessage(req)
 }
 
-
 func (w *streamHandlerWrapper) HandleConnectionEvent(event plugin.StreamConnectionEvent) (plugin.StreamConnectionResponse, error) {
 	if w.p.client == nil {
 		return plugin.StreamConnectionResponse{Success: false, Action: "ignore"}, nil
@@ -162,11 +173,9 @@ func (w *streamHandlerWrapper) HandleConnectionEvent(event plugin.StreamConnecti
 	return w.p.client.HandleConnectionEvent(event)
 }
 
-
 // ============================================================================
 // Command Handlers
 // ============================================================================
-
 
 func (p *HyperliquidPlugin) handleGetMarkets(_ map[string]any) plugin.Response {
 	markets, err := p.client.GetMarkets()
@@ -177,13 +186,11 @@ func (p *HyperliquidPlugin) handleGetMarkets(_ map[string]any) plugin.Response {
 	return plugin.SuccessResponse(markets, time.Hour*12)
 }
 
-
 func (p *HyperliquidPlugin) handleGetTimeframes(_ map[string]any) plugin.Response {
 	timeframes := p.client.GetTimeframes()
 
 	return plugin.SuccessResponse(timeframes, time.Hour*12)
 }
-
 
 func (p *HyperliquidPlugin) handleGetOHLCV(params map[string]any) plugin.Response {
 	if p.client == nil {
@@ -213,7 +220,6 @@ func (p *HyperliquidPlugin) handleGetOHLCV(params map[string]any) plugin.Respons
 
 	return plugin.SuccessResponse(records)
 }
-
 
 func (p *HyperliquidPlugin) handleOHLCVStream(params map[string]any) plugin.Response {
 	if p.client == nil {
@@ -262,7 +268,6 @@ func (p *HyperliquidPlugin) handleOHLCVStream(params map[string]any) plugin.Resp
 	return plugin.SuccessTypedResponse("StreamMarker", marker)
 }
 
-
 func (p *HyperliquidPlugin) handleGetAccount(_ map[string]any) plugin.Response {
 	if p.client == nil {
 		return plugin.ErrorResponseMsg("client not initialized")
@@ -275,7 +280,6 @@ func (p *HyperliquidPlugin) handleGetAccount(_ map[string]any) plugin.Response {
 
 	return plugin.SuccessResponse(account, time.Second*5)
 }
-
 
 func (p *HyperliquidPlugin) handleGetBalances(_ map[string]any) plugin.Response {
 	if p.client == nil {
@@ -290,7 +294,6 @@ func (p *HyperliquidPlugin) handleGetBalances(_ map[string]any) plugin.Response 
 	return plugin.SuccessResponse(balances, time.Second*3)
 }
 
-
 func (p *HyperliquidPlugin) handleGetPositions(_ map[string]any) plugin.Response {
 	if p.client == nil {
 		return plugin.ErrorResponseMsg("client not initialized")
@@ -303,7 +306,6 @@ func (p *HyperliquidPlugin) handleGetPositions(_ map[string]any) plugin.Response
 
 	return plugin.SuccessResponse(positions, time.Second*3)
 }
-
 
 func (p *HyperliquidPlugin) handleGetOrders(params map[string]any) plugin.Response {
 	if p.client == nil {
@@ -319,7 +321,6 @@ func (p *HyperliquidPlugin) handleGetOrders(params map[string]any) plugin.Respon
 
 	return plugin.SuccessResponse(orders, time.Second*3)
 }
-
 
 func (p *HyperliquidPlugin) handleCreateOrders(params map[string]any) plugin.Response {
 	if p.client == nil {
@@ -338,7 +339,6 @@ func (p *HyperliquidPlugin) handleCreateOrders(params map[string]any) plugin.Res
 
 	return plugin.SuccessResponse(resp)
 }
-
 
 func (p *HyperliquidPlugin) handleCancelOrders(params map[string]any) plugin.Response {
 	if p.client == nil {
