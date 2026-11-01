@@ -45,7 +45,7 @@ func (p *HyperliquidPlugin) GetMeta() m.Meta {
 		Category:    "dex",
 		Description: "Hyperliquid L1 exchange — perps and spot with agent wallet trading",
 		Author:      "trading_peter",
-		Version:     "0.1.0",
+		Version: "0.2.0",
 		Repository:  "https://github.com/trading-peter/plusev_datasource_hyperliquid_plugin",
 		Tags:        []string{"hyperliquid", "dex", "perps", "spot", "l1"},
 		Contacts: []m.AuthorContact{
