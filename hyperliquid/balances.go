@@ -4,9 +4,8 @@ import (
 	"strings"
 	"time"
 
-	acct "github.com/plusev-terminal/go-plugin-common/datasrc/exchange/account"
+	acct "github.com/plusev-terminal/go-plugin-common/v2/datasrc/exchange/account"
 )
-
 
 // GetBalances returns balances only (no account metadata beyond balances snapshot).
 func (c *Client) GetBalances() (acct.BalancesResponse, error) {
@@ -47,9 +46,9 @@ func (c *Client) GetBalances() (acct.BalancesResponse, error) {
 
 	// USDC as the futures collateral
 	futuresScope.Balances["USDC"] = acct.AssetBalance{
-		Asset:            "USDC",
-		Total:            clearinghouse.MarginSummary.AccountValue,
-		AvailableToTrade: clearinghouse.Withdrawable,
+		Asset:               "USDC",
+		Total:               clearinghouse.MarginSummary.AccountValue,
+		AvailableToTrade:    clearinghouse.Withdrawable,
 		AvailableToWithdraw: clearinghouse.Withdrawable,
 		Components: map[string]string{
 			"margin_used": clearinghouse.MarginSummary.TotalMarginUsed,
@@ -92,7 +91,6 @@ func (c *Client) GetBalances() (acct.BalancesResponse, error) {
 
 	return resp, nil
 }
-
 
 // subtractStr performs string-based float subtraction for simple values.
 func subtractStr(a, b string) string {

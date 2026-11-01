@@ -4,7 +4,7 @@ go 1.24.2
 
 require (
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.4.0
-	github.com/plusev-terminal/go-plugin-common v1.15.0
+	github.com/plusev-terminal/go-plugin-common/v2 v2.1.0
 	github.com/vmihailenco/msgpack/v5 v5.4.1
 	golang.org/x/crypto v0.42.0
 )
@@ -21,5 +21,3 @@ require (
 	golang.org/x/sys v0.36.0 // indirect
 	golang.org/x/text v0.29.0 // indirect
 )
-
-replace github.com/plusev-terminal/go-plugin-common => ../plusev/go-plugin-common

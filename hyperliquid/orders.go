@@ -5,9 +5,8 @@ import (
 	"strings"
 	"time"
 
-	acct "github.com/plusev-terminal/go-plugin-common/datasrc/exchange/account"
+	acct "github.com/plusev-terminal/go-plugin-common/v2/datasrc/exchange/account"
 )
-
 
 // GetOrders returns the user's open orders.
 func (c *Client) GetOrders(openOnly bool) (acct.OrdersResponse, error) {
@@ -41,7 +40,7 @@ func (c *Client) GetOrders(openOnly bool) (acct.OrdersResponse, error) {
 			Side:              side,
 			Type:              orderType,
 			Status:            status,
-			Price:             o.LimitPx,
+			Price:             acct.OptionalPrice(o.LimitPx),
 			Quantity:          o.OrigSz,
 			ExecutedQuantity:  executed,
 			RemainingQuantity: remaining,
@@ -56,8 +55,12 @@ func (c *Client) GetOrders(openOnly bool) (acct.OrdersResponse, error) {
 			order.ClientOrderID = *o.Cloid
 		}
 
+		// Hyperliquid TP/SL orders always trigger on the mark price; the
+		// activation price is first-class on Order, the venue's U/D
+		// direction stays in Components.
 		if o.IsTrigger {
-			order.Components["trigger_px"] = o.TriggerPx
+			order.TriggerPrice = acct.OptionalPrice(o.TriggerPx)
+			order.TriggerSource = acct.TriggerSourceMark
 			order.Components["trigger_condition"] = o.TriggerCondition
 		}
 
@@ -109,7 +112,6 @@ func (c *Client) GetOrders(openOnly bool) (acct.OrdersResponse, error) {
 	return resp, nil
 }
 
-
 func normalizeHLSide(side string) acct.OrderSide {
 	s := strings.ToUpper(strings.TrimSpace(side))
 	switch s {
@@ -121,7 +123,6 @@ func normalizeHLSide(side string) acct.OrderSide {
 		return acct.OrderSideUnknown
 	}
 }
-
 
 func normalizeHLType(o FrontendOpenOrder) acct.OrderType {
 	if o.IsTrigger {
@@ -151,7 +152,6 @@ func normalizeHLType(o FrontendOpenOrder) acct.OrderType {
 		return acct.OrderType(strings.ToLower(s))
 	}
 }
-
 
 func normalizeHLStatus(o FrontendOpenOrder) acct.OrderStatus {
 	// frontendOpenOrders are by definition open

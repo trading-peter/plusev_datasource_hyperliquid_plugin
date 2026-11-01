@@ -8,11 +8,10 @@ import (
 	"strings"
 	"time"
 
-	ex "github.com/plusev-terminal/go-plugin-common/datasrc/exchange"
-	acct "github.com/plusev-terminal/go-plugin-common/datasrc/exchange/account"
-	tt "github.com/plusev-terminal/go-plugin-common/trading"
+	ex "github.com/plusev-terminal/go-plugin-common/v2/datasrc/exchange"
+	acct "github.com/plusev-terminal/go-plugin-common/v2/datasrc/exchange/account"
+	tt "github.com/plusev-terminal/go-plugin-common/v2/trading"
 )
-
 
 // CreateOrderResult holds the outcome of creating a single order.
 type CreateOrderResult struct {
@@ -25,13 +24,11 @@ type CreateOrderResult struct {
 	Extra         map[string]any
 }
 
-
 // indexedOrder pairs an order with its original index in the batch.
 type indexedOrder struct {
 	index int
 	order ex.CreateOrderParams
 }
-
 
 // CreateOrders places one or more orders on Hyperliquid.
 func (c *Client) CreateOrders(params ex.CreateOrdersParams) (acct.CreateOrdersResponse, error) {
@@ -97,7 +94,6 @@ func (c *Client) CreateOrders(params ex.CreateOrdersParams) (acct.CreateOrdersRe
 		Results:     respResults,
 	}, nil
 }
-
 
 func (c *Client) handleRegularOrders(orders []indexedOrder, results []CreateOrderResult) error {
 	wires := make([]OrderWire, 0, len(orders))
@@ -216,7 +212,6 @@ func (c *Client) handleRegularOrders(orders []indexedOrder, results []CreateOrde
 	return nil
 }
 
-
 func (c *Client) handleTwapOrder(order ex.CreateOrderParams, result *CreateOrderResult) error {
 	isSpot := isSpotMarket(order.Market)
 	asset, err := c.coinToAssetIndex(order.Market.Symbol, isSpot)
@@ -277,7 +272,6 @@ func (c *Client) handleTwapOrder(order ex.CreateOrderParams, result *CreateOrder
 	return nil
 }
 
-
 // buildOrderWire converts a normalized order to the Hyperliquid wire format.
 func (c *Client) buildOrderWire(order ex.CreateOrderParams) (OrderWire, error) {
 	isSpot := isSpotMarket(order.Market)
@@ -315,7 +309,6 @@ func (c *Client) buildOrderWire(order ex.CreateOrderParams) (OrderWire, error) {
 
 	return wire, nil
 }
-
 
 // buildOrderType determines the wire order type and price based on the normalized order.
 func (c *Client) buildOrderType(order ex.CreateOrderParams) (OrderWireType, string, error) {
@@ -372,22 +365,17 @@ func (c *Client) buildOrderType(order ex.CreateOrderParams) (OrderWireType, stri
 	}
 }
 
-
-// buildTriggerOrder builds a trigger (TP/SL) order wire type.
+// buildTriggerOrder builds a trigger (TP/SL) order wire type. Hyperliquid
+// trigger orders carry only triggerPx + tpsl direction — they always fire on
+// the mark price (the API has no trigger-source selector), so
+// TriggerSource needs no wire mapping and GetOrderCapabilities declares mark
+// as the venue's only and default source.
 func (c *Client) buildTriggerOrder(order ex.CreateOrderParams, tpsl string) (OrderWireType, string, error) {
-	triggerPxStr := order.TriggerPrice
-	if triggerPxStr == "" {
-		if tpsl == "tp" {
-			triggerPxStr = order.TakeProfitPrice
-		} else {
-			triggerPxStr = order.StopPrice
-		}
-	}
+	triggerPxStr := resolveTriggerPrice(order)
 
 	if triggerPxStr == "" {
 		return OrderWireType{}, "", fmt.Errorf("triggerPrice is required for trigger order")
 	}
-
 	triggerPx, err := floatToWireStr(parseFloatStr(triggerPxStr))
 	if err != nil {
 		return OrderWireType{}, "", fmt.Errorf("invalid trigger price: %w", err)
@@ -421,21 +409,52 @@ func (c *Client) buildTriggerOrder(order ex.CreateOrderParams, tpsl string) (Ord
 	}, limitPx, nil
 }
 
+// resolveTriggerPrice returns the activation price of a conditional order:
+// the first-class TriggerPrice, else the alias matching the order type.
+func resolveTriggerPrice(order ex.CreateOrderParams) string {
+	if order.TriggerPrice != "" {
+		return order.TriggerPrice
+	}
+
+	switch order.Type {
+	case acct.OrderTypeTakeProfit, acct.OrderTypeTakeProfitMarket, acct.OrderTypeTakeProfitLimit:
+		return order.TakeProfitPrice
+	default:
+		return order.StopPrice
+	}
+}
+
+// isConditionalType reports whether orders of type t wait for a trigger.
+func isConditionalType(t acct.OrderType) bool {
+	switch t {
+	case acct.OrderTypeStop, acct.OrderTypeStopLimit, acct.OrderTypeStopMarket,
+		acct.OrderTypeTakeProfit, acct.OrderTypeTakeProfitLimit, acct.OrderTypeTakeProfitMarket:
+		return true
+	}
+
+	return false
+}
 
 func buildOrderResult(order ex.CreateOrderParams, orderID string, avgPx string) *acct.Order {
-	return &acct.Order{
+	result := &acct.Order{
 		OrderID:       orderID,
 		ClientOrderID: order.ClientOrderID,
 		Symbol:        order.Market.Symbol,
 		Side:          order.Side,
 		Type:          order.Type,
-		Price:         order.Price,
+		Price:         acct.OptionalPrice(order.Price),
 		Quantity:      parseQty(order),
 		ReduceOnly:    order.ReduceOnly,
 		PostOnly:      order.PostOnly,
 	}
-}
 
+	if isConditionalType(order.Type) {
+		result.TriggerPrice = resolveTriggerPrice(order)
+		result.TriggerSource = acct.TriggerSourceMark
+	}
+
+	return result
+}
 
 // parseQty extracts the quantity string from an order.
 func parseQty(order ex.CreateOrderParams) string {
@@ -446,12 +465,10 @@ func parseQty(order ex.CreateOrderParams) string {
 	return order.QuoteQuantity
 }
 
-
 // isSpotMarket returns true if the market asset type is spot.
 func isSpotMarket(market tt.Market) bool {
-	return market.AssetType == "spot"
+	return market.AssetType == tt.AssetTypeSpot
 }
-
 
 // floatToWireStr converts a float64 to a wire-compatible string (strips trailing zeros).
 func floatToWireStr(x float64) (string, error) {
@@ -484,7 +501,6 @@ func floatToWireStr(x float64) (string, error) {
 	return result, nil
 }
 
-
 func parseFloatStr(s string) float64 {
 	f, err := strconv.ParseFloat(strings.TrimSpace(s), 64)
 	if err != nil {
@@ -494,11 +510,9 @@ func parseFloatStr(s string) float64 {
 	return f
 }
 
-
 func formatFloat(f float64) string {
 	return fmt.Sprintf("%.15g", f)
 }
-
 
 func absFloat(x float64) float64 {
 	if x < 0 {
@@ -507,7 +521,6 @@ func absFloat(x float64) float64 {
 
 	return x
 }
-
 
 func extraInt(extra map[string]any, keys ...string) (int, bool) {
 	for _, key := range keys {
@@ -525,7 +538,6 @@ func extraInt(extra map[string]any, keys ...string) (int, bool) {
 
 	return 0, false
 }
-
 
 func extraBool(extra map[string]any, keys ...string) (bool, bool) {
 	for _, key := range keys {

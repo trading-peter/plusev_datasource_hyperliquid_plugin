@@ -4,13 +4,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/plusev-terminal/go-plugin-common/plugin"
-	"github.com/plusev-terminal/go-plugin-common/requester"
+	"github.com/plusev-terminal/go-plugin-common/v2/plugin"
+	"github.com/plusev-terminal/go-plugin-common/v2/requester"
 
 	"github.com/trading-peter/plusev_datasource_hyperliquid_plugin/hyperliquid"
 
-	ex "github.com/plusev-terminal/go-plugin-common/datasrc/exchange"
-	m "github.com/plusev-terminal/go-plugin-common/meta"
+	ex "github.com/plusev-terminal/go-plugin-common/v2/datasrc/exchange"
+	acct "github.com/plusev-terminal/go-plugin-common/v2/datasrc/exchange/account"
+	m "github.com/plusev-terminal/go-plugin-common/v2/meta"
+	tt "github.com/plusev-terminal/go-plugin-common/v2/trading"
 )
 
 func init() {
@@ -95,6 +97,43 @@ func (p *HyperliquidPlugin) GetMeta() m.Meta {
 // the legacy limiter on top of it.
 func (p *HyperliquidPlugin) GetRateLimits() []plugin.RateLimit {
 	return []plugin.RateLimit{}
+}
+
+// GetOrderCapabilities declares the order surface this plugin really
+// implements (see hyperliquid/createOrders.go). Hyperliquid serves spot and
+// perpetual markets; TP/SL orders always trigger on the mark price — the
+// exchange API has no trigger-source selector — and the venue has neither
+// trailing stops nor order expiry, GTD or otherwise, so those stay
+// undeclared and the host rejects them upfront.
+func (p *HyperliquidPlugin) GetOrderCapabilities() ex.OrderCapabilities {
+	return ex.OrderCapabilities{
+		AssetTypes: []tt.AssetType{tt.AssetTypeSpot, tt.AssetTypePerpetual},
+		OrderTypes: []acct.OrderType{
+			acct.OrderTypeLimit,
+			acct.OrderTypeMarket,
+			acct.OrderTypeStop,
+			acct.OrderTypeStopLimit,
+			acct.OrderTypeStopMarket,
+			acct.OrderTypeTakeProfit,
+			acct.OrderTypeTakeProfitLimit,
+			acct.OrderTypeTakeProfitMarket,
+		},
+		TimeInForce: []acct.TimeInForce{
+			acct.TimeInForceGTC, // wire "Gtc" (default)
+			acct.TimeInForceIOC, // wire "Ioc"
+			acct.TimeInForcePostOnly,
+			acct.TimeInForceGTX, // both post-only variants map to wire "Alo"
+		},
+		TriggerSources:       []acct.TriggerSource{acct.TriggerSourceMark},
+		DefaultTriggerSource: acct.TriggerSourceMark,
+		ReduceOnly:           true,
+		PostOnly:             true,
+		QuoteQuantity:        true,
+		ClientOrderID:        true,
+		// Extra keys read when routing/placing orders (TWAP routing and its
+		// two knobs); every other Extra key is rejected by the host.
+		ExtraKeys: []string{"twap", "minutes", "randomize"},
+	}
 }
 
 func (p *HyperliquidPlugin) GetConfigFields() []plugin.ConfigField {

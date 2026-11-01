@@ -6,10 +6,9 @@ import (
 	"strings"
 	"time"
 
-	ex "github.com/plusev-terminal/go-plugin-common/datasrc/exchange"
-	acct "github.com/plusev-terminal/go-plugin-common/datasrc/exchange/account"
+	ex "github.com/plusev-terminal/go-plugin-common/v2/datasrc/exchange"
+	acct "github.com/plusev-terminal/go-plugin-common/v2/datasrc/exchange/account"
 )
-
 
 // CancelOrders cancels one or more orders, or all orders if no IDs are provided.
 func (c *Client) CancelOrders(params ex.CancelOrdersParams) (acct.CancelOrdersResponse, error) {
@@ -39,7 +38,6 @@ func (c *Client) CancelOrders(params ex.CancelOrdersParams) (acct.CancelOrdersRe
 		Results:     results,
 	}, nil
 }
-
 
 // cancelAllOrders fetches all open orders and cancels them.
 func (c *Client) cancelAllOrders(results *[]acct.CancelOrderResult, symbol string) error {
@@ -100,7 +98,6 @@ func (c *Client) cancelAllOrders(results *[]acct.CancelOrderResult, symbol strin
 	return nil
 }
 
-
 func (c *Client) cancelSingleOrder(id, symbol string, result *acct.CancelOrderResult) error {
 	isNumeric := true
 	for _, r := range id {
@@ -155,7 +152,6 @@ func (c *Client) cancelSingleOrder(id, symbol string, result *acct.CancelOrderRe
 	return c.executeCancelByCloid(action, result)
 }
 
-
 func (c *Client) executeCancel(action CancelAction, result *acct.CancelOrderResult) error {
 	var respRaw json.RawMessage
 
@@ -201,7 +197,6 @@ func (c *Client) executeCancel(action CancelAction, result *acct.CancelOrderResu
 	return nil
 }
 
-
 func (c *Client) executeCancelByCloid(action CancelByCloidAction, result *acct.CancelOrderResult) error {
 	var respRaw json.RawMessage
 
@@ -221,7 +216,6 @@ func (c *Client) executeCancelByCloid(action CancelByCloidAction, result *acct.C
 	result.Success = true
 	return nil
 }
-
 
 func parseInt64(s string) (int64, error) {
 	var n int64

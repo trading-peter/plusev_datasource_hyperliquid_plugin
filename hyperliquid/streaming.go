@@ -5,10 +5,9 @@ import (
 	"fmt"
 	"strings"
 
-	commonstream "github.com/plusev-terminal/go-plugin-common/stream"
-	"github.com/plusev-terminal/go-plugin-common/plugin"
+	"github.com/plusev-terminal/go-plugin-common/v2/plugin"
+	commonstream "github.com/plusev-terminal/go-plugin-common/v2/stream"
 )
-
 
 // PrepareStream sets up a WebSocket stream for OHLCV candle data.
 func (c *Client) PrepareStream(request plugin.StreamSetupRequest) (plugin.StreamSetupResponse, error) {
@@ -52,7 +51,6 @@ func (c *Client) PrepareStream(request plugin.StreamSetupRequest) (plugin.Stream
 	return response, nil
 }
 
-
 // WSCandleUpdate represents a candle update from the WebSocket.
 type WSCandleUpdate struct {
 	Channel string `json:"channel"`
@@ -66,7 +64,6 @@ type WSCandleUpdate struct {
 		N int    `json:"n"`
 	} `json:"data"`
 }
-
 
 // HandleStreamMessage processes incoming WebSocket messages and extracts candle data.
 func (c *Client) HandleStreamMessage(request plugin.StreamMessageRequest) (plugin.StreamMessageResponse, error) {
@@ -105,7 +102,6 @@ func (c *Client) HandleStreamMessage(request plugin.StreamMessageRequest) (plugi
 	return plugin.StreamMessageResponse{Success: true, Action: "ignore"}, nil
 }
 
-
 // HandleConnectionEvent handles WebSocket connection lifecycle events.
 func (c *Client) HandleConnectionEvent(event plugin.StreamConnectionEvent) (plugin.StreamConnectionResponse, error) {
 	switch event.EventType {
@@ -121,7 +117,6 @@ func (c *Client) HandleConnectionEvent(event plugin.StreamConnectionEvent) (plug
 		return plugin.StreamConnectionResponse{Success: true, Action: "ignore"}, nil
 	}
 }
-
 
 // BuildStreamMarker creates the StreamMarker response for ohlcvStream command.
 func BuildStreamMarker(setupResp plugin.StreamSetupResponse, streamID string) (commonstream.StreamMarker, error) {

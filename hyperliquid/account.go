@@ -5,9 +5,8 @@ import (
 	"strings"
 	"time"
 
-	acct "github.com/plusev-terminal/go-plugin-common/datasrc/exchange/account"
+	acct "github.com/plusev-terminal/go-plugin-common/v2/datasrc/exchange/account"
 )
-
 
 // GetAccount fetches the user's perpetuals account summary and spot balances.
 func (c *Client) GetAccount() (acct.Account, error) {
@@ -28,14 +27,14 @@ func (c *Client) GetAccount() (acct.Account, error) {
 	}
 
 	account := acct.Account{
-		Exchange:      "hyperliquid",
-		AccountID:     c.walletAddress,
-		Type:          acct.AccountTypeFutures,
-		FetchedAt:     fetchedAt,
-		CustodyModel:  acct.CustodyModelSelfCustody,
-		IsCustodial:   true,
-		Scopes:        map[acct.ScopeType]acct.BalanceScope{},
-		Extra:         map[string]any{},
+		Exchange:     "hyperliquid",
+		AccountID:    c.walletAddress,
+		Type:         acct.AccountTypeFutures,
+		FetchedAt:    fetchedAt,
+		CustodyModel: acct.CustodyModelSelfCustody,
+		IsCustodial:  true,
+		Scopes:       map[acct.ScopeType]acct.BalanceScope{},
+		Extra:        map[string]any{},
 	}
 
 	// Futures scope — margin summary
@@ -75,7 +74,7 @@ func (c *Client) GetAccount() (acct.Account, error) {
 					"hold": bal.Hold,
 				},
 				Extra: map[string]any{
-					"entry_ntl": bal.EntryNtl,
+					"entry_ntl":   bal.EntryNtl,
 					"token_index": bal.Token,
 				},
 			}
@@ -96,7 +95,6 @@ func (c *Client) GetAccount() (acct.Account, error) {
 	return account, nil
 }
 
-
 // getClearinghouseState fetches the perpetuals clearinghouse state.
 func (c *Client) getClearinghouseState() (*ClearinghouseStateResponse, error) {
 	var result ClearinghouseStateResponse
@@ -108,7 +106,6 @@ func (c *Client) getClearinghouseState() (*ClearinghouseStateResponse, error) {
 
 	return &result, nil
 }
-
 
 // getSpotClearinghouseState fetches spot token balances.
 func (c *Client) getSpotClearinghouseState() (*SpotClearinghouseStateResponse, error) {

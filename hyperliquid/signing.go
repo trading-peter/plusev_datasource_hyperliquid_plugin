@@ -14,7 +14,6 @@ import (
 	"golang.org/x/crypto/sha3"
 )
 
-
 // keccak256 computes the Keccak-256 hash (not SHA3-256).
 func keccak256(data ...[]byte) []byte {
 	h := sha3.NewLegacyKeccak256()
@@ -26,14 +25,12 @@ func keccak256(data ...[]byte) []byte {
 	return h.Sum(nil)
 }
 
-
 // SignatureResult holds the ECDSA signature components for the exchange API.
 type SignatureResult struct {
 	R string `json:"r"`
 	S string `json:"s"`
 	V int    `json:"v"`
 }
-
 
 // PrivateKeyBytes parses a hex private key string (with or without 0x prefix) into raw bytes.
 func PrivateKeyBytes(hexKey string) ([]byte, error) {
@@ -51,7 +48,6 @@ func PrivateKeyBytes(hexKey string) ([]byte, error) {
 	return data, nil
 }
 
-
 // DeriveAddress computes the EVM address (20 bytes) from a private key.
 func DeriveAddress(privKeyBytes []byte) string {
 	priv := secp256k1.PrivKeyFromBytes(privKeyBytes)
@@ -62,7 +58,6 @@ func DeriveAddress(privKeyBytes []byte) string {
 
 	return fmt.Sprintf("0x%s", hex.EncodeToString(hash[12:]))
 }
-
 
 // SignL1Action signs an L1 action using the Hyperliquid EIP-712 phantom-agent scheme.
 // action must be a struct with msgpack tags (field order is critical).
@@ -78,7 +73,6 @@ func SignL1Action(privKeyBytes []byte, action any, vaultAddress string, nonce in
 
 	return signDigest(privKeyBytes, digest)
 }
-
 
 // actionHash constructs the msgpack action hash that goes into the phantom agent.
 func actionHash(action any, vaultAddress string, nonce int64, expiresAfter *int64) []byte {
@@ -121,7 +115,6 @@ func actionHash(action any, vaultAddress string, nonce int64, expiresAfter *int6
 	return keccak256(data)
 }
 
-
 func addressToBytes(address string) []byte {
 	address = strings.TrimPrefix(address, "0x")
 
@@ -129,7 +122,6 @@ func addressToBytes(address string) []byte {
 
 	return bytes
 }
-
 
 // constructPhantomAgent builds the EIP-712 message: {source, connectionId}.
 func constructPhantomAgent(hash []byte, isMainnet bool) map[string]any {
@@ -143,7 +135,6 @@ func constructPhantomAgent(hash []byte, isMainnet bool) map[string]any {
 		"connectionId": hash,
 	}
 }
-
 
 // eip712Digest computes the final hash to sign:
 // keccak256(0x1901 || domainSeparator || structHash)
@@ -186,7 +177,6 @@ func eip712Digest(phantomAgent map[string]any) ([]byte, error) {
 	return keccak256([]byte{0x19, 0x01}, domainSeparator, structHash), nil
 }
 
-
 // signDigest signs a 32-byte hash with secp256k1 and returns the Ethereum-style signature.
 func signDigest(privKeyBytes []byte, digest []byte) (SignatureResult, error) {
 	priv := secp256k1.PrivKeyFromBytes(privKeyBytes)
@@ -205,7 +195,6 @@ func signDigest(privKeyBytes []byte, digest []byte) (SignatureResult, error) {
 		V: v,
 	}, nil
 }
-
 
 // convertStr16ToStr8 converts msgpack str16 headers (0xda + 2-byte len) to str8
 // (0xd9 + 1-byte len) for strings shorter than 256 bytes, matching Python's
@@ -227,7 +216,6 @@ func convertStr16ToStr8(data []byte) []byte {
 
 	return result
 }
-
 
 func walkMsgpackValue(data []byte, pos int, result *[]byte) int {
 	if pos >= len(data) {
@@ -414,7 +402,6 @@ func walkMsgpackValue(data []byte, pos int, result *[]byte) int {
 	}
 }
 
-
 func copyFixed(data []byte, pos, size int, result *[]byte) int {
 	if len(data)-pos < size {
 		return 0
@@ -422,7 +409,6 @@ func copyFixed(data []byte, pos, size int, result *[]byte) int {
 	*result = append(*result, data[pos:pos+size]...)
 	return size
 }
-
 
 func copyVarLen(data []byte, pos, lenBytes int, result *[]byte) int {
 	headerSize := 1 + lenBytes
@@ -438,7 +424,6 @@ func copyVarLen(data []byte, pos, lenBytes int, result *[]byte) int {
 	return total
 }
 
-
 func copyExtVarLen(data []byte, pos, lenBytes int, result *[]byte) int {
 	headerSize := 1 + lenBytes + 1
 	if len(data)-pos < headerSize {
@@ -452,7 +437,6 @@ func copyExtVarLen(data []byte, pos, lenBytes int, result *[]byte) int {
 	*result = append(*result, data[pos:pos+total]...)
 	return total
 }
-
 
 func readLen(data []byte, pos, size int) int {
 	switch size {

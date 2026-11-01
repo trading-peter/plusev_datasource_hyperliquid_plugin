@@ -5,9 +5,8 @@ import (
 	"fmt"
 	"strconv"
 
-	tt "github.com/plusev-terminal/go-plugin-common/trading"
+	tt "github.com/plusev-terminal/go-plugin-common/v2/trading"
 )
-
 
 // GetMarkets fetches all available perpetual and spot markets.
 func (c *Client) GetMarkets() ([]tt.Market, error) {
@@ -30,7 +29,6 @@ func (c *Client) GetMarkets() ([]tt.Market, error) {
 
 	return markets, nil
 }
-
 
 func (c *Client) getPerpMarkets() ([]tt.Market, error) {
 	var raw json.RawMessage
@@ -75,7 +73,7 @@ func (c *Client) getPerpMarkets() ([]tt.Market, error) {
 			Symbol:      asset.Name,
 			Base:        asset.Name,
 			Quote:       "USDC",
-			AssetType:   "perpetual",
+			AssetType:   tt.AssetTypePerpetual,
 			MaxLeverage: strconv.Itoa(asset.MaxLeverage),
 		}
 
@@ -105,7 +103,6 @@ func (c *Client) getPerpMarkets() ([]tt.Market, error) {
 
 	return markets, nil
 }
-
 
 func (c *Client) getSpotMarkets() ([]tt.Market, error) {
 	var raw json.RawMessage
@@ -147,10 +144,13 @@ func (c *Client) getSpotMarkets() ([]tt.Market, error) {
 		quoteIdx := pair.Tokens[1]
 
 		var baseName, quoteName string
+		var baseToken *SpotToken
 
-		for _, token := range meta.Tokens {
+		for i := range meta.Tokens {
+			token := &meta.Tokens[i]
 			if token.Index == baseIdx {
 				baseName = token.Name
+				baseToken = token
 			}
 			if token.Index == quoteIdx {
 				quoteName = token.Name
@@ -179,7 +179,14 @@ func (c *Client) getSpotMarkets() ([]tt.Market, error) {
 			Symbol:    pair.Name,
 			Base:      baseName,
 			Quote:     quoteName,
-			AssetType: "spot",
+			AssetType: tt.AssetTypeSpot,
+		}
+
+		// The base token's on-chain id (contract/mint; empty for native
+		// tokens) is the pool-level identity of a spot pair — publish it as
+		// Address so Market.Key() disambiguates same-named pairs.
+		if baseToken != nil {
+			market.Address = baseToken.TokenID
 		}
 
 		// Set quantity precision from base token
@@ -208,7 +215,6 @@ func (c *Client) getSpotMarkets() ([]tt.Market, error) {
 	return markets, nil
 }
 
-
 // GetTimeframes returns the supported candle intervals.
 func (c *Client) GetTimeframes() []tt.Timeframe {
 	return []tt.Timeframe{
@@ -229,7 +235,6 @@ func (c *Client) GetTimeframes() []tt.Timeframe {
 	}
 }
 
-
 // calculateTickFromDecimals returns the tick size for a given number of decimals.
 func calculateTickFromDecimals(decimals int) string {
 	if decimals <= 0 {
@@ -243,7 +248,6 @@ func calculateTickFromDecimals(decimals int) string {
 
 	return result + "1"
 }
-
 
 // currentTimestampMs returns the current time in milliseconds.
 func currentTimestampMs() int64 {

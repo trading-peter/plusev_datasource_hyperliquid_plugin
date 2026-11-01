@@ -4,9 +4,8 @@ import (
 	"fmt"
 	"time"
 
-	acct "github.com/plusev-terminal/go-plugin-common/datasrc/exchange/account"
+	acct "github.com/plusev-terminal/go-plugin-common/v2/datasrc/exchange/account"
 )
-
 
 // GetPositions returns all open perpetual positions.
 func (c *Client) GetPositions() (acct.PositionsResponse, error) {
@@ -39,19 +38,19 @@ func (c *Client) GetPositions() (acct.PositionsResponse, error) {
 		isIsolated := pos.Leverage.Type == "isolated"
 
 		position := acct.Position{
-			Symbol:          pos.Coin,
-			Side:            side,
-			Quantity:        fmt.Sprintf("%.15g", absFloat(szi)),
-			EntryPrice:      pos.EntryPx,
+			Symbol:           pos.Coin,
+			Side:             side,
+			Quantity:         fmt.Sprintf("%.15g", absFloat(szi)),
+			EntryPrice:       pos.EntryPx,
 			LiquidationPrice: pos.LiquidationPx,
-			UnrealizedPnL:   pos.UnrealizedPnl,
-			Leverage:        pos.Leverage.Value,
-			IsIsolated:      isIsolated,
-			InitialMargin:   pos.MarginUsed,
+			UnrealizedPnL:    pos.UnrealizedPnl,
+			Leverage:         pos.Leverage.Value,
+			IsIsolated:       isIsolated,
+			InitialMargin:    pos.MarginUsed,
 			Components: map[string]string{
-				"position_value":  pos.PositionValue,
+				"position_value":   pos.PositionValue,
 				"return_on_equity": pos.ReturnOnEquity,
-				"max_leverage":    fmt.Sprintf("%d", pos.MaxLeverage),
+				"max_leverage":     fmt.Sprintf("%d", pos.MaxLeverage),
 			},
 		}
 

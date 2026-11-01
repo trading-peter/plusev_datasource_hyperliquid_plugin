@@ -4,9 +4,8 @@ import (
 	"fmt"
 	"time"
 
-	tt "github.com/plusev-terminal/go-plugin-common/trading"
+	tt "github.com/plusev-terminal/go-plugin-common/v2/trading"
 )
-
 
 // OHLCVParams contains parameters for fetching candle data.
 type OHLCVParams struct {
@@ -16,7 +15,6 @@ type OHLCVParams struct {
 	EndTime   *time.Time
 	Limit     int
 }
-
 
 // GetOHLCV fetches historical candle data from the candleSnapshot endpoint.
 func (c *Client) GetOHLCV(params OHLCVParams) ([]tt.OHLCVRecord, error) {
@@ -76,7 +74,6 @@ func (c *Client) GetOHLCV(params OHLCVParams) ([]tt.OHLCVRecord, error) {
 	return records, nil
 }
 
-
 // ConvertTimeframeToInterval converts our timeframe string to Hyperliquid interval format.
 // Hyperliquid uses: "1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "8h", "12h", "1d", "3d", "1w", "1M"
 func ConvertTimeframeToInterval(timeframe string) string {
@@ -102,4 +99,3 @@ func ConvertTimeframeToInterval(timeframe string) string {
 		return "1h"
 	}
 }
-
